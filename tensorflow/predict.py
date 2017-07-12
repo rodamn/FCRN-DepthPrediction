@@ -4,18 +4,8 @@ import numpy as np
 import tensorflow as tf
 from matplotlib import pyplot as plt
 from PIL import Image
-from datetime import datetime
 
 import models
-
-
-def timer(fn, *args, **kwargs):
-    start = datetime.utcnow()
-    result = fn(*args, **kwargs)
-    finish = datetime.utcnow()
-    print('Elapsed time for', fn.__name__ + ':', finish - start)
-    return result
-
 
 def predict(model_data_path, image_path):
     # Default input size
@@ -31,7 +21,7 @@ def predict(model_data_path, image_path):
     img = np.expand_dims(np.asarray(img), axis = 0)
    
     # Create a placeholder for the input image
-    input_node = tf.placeholder(tf.float32, shape=(None, height, width, channels))
+    input_node = tf.placeholder(tf.float32, shape=(None, height, width, channels), name='input')
     
     # Construct the network
     net = models.ResNet50UpProj({'data': input_node}, batch_size)
@@ -53,7 +43,7 @@ def predict(model_data_path, image_path):
         sess.run(init_new_vars_op)
         
         # Evalute the network for the given image
-        pred = timer(sess.run, net.get_output(), feed_dict={input_node: img})
+        pred = sess.run(net.get_output(), feed_dict={input_node: img})
         
         # Plot result
         fig = plt.figure()
