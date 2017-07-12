@@ -22,7 +22,7 @@ def predict(model_data_path, image_path):
 	img = np.expand_dims(np.asarray(img), axis = 0)
    
 	# Create a placeholder for the input image
-	input_node = tf.placeholder(tf.float32, shape=(None, height, width, channels))
+	input_node = tf.placeholder(tf.float32, shape=(None, height, width, channels), name='input')
 	
 	# Construct the network
 	net = models.ResNet50UpProj({'data': input_node}, batch_size)
