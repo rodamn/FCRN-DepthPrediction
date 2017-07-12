@@ -11,6 +11,21 @@ import tensorflow as tf
 
 DEFAULT_PADDING = 'SAME'
 
+def get_incoming_shape(incoming):
+	""" Returns the incoming data shape """
+	if isinstance(incoming, tf.Tensor):
+		return incoming.get_shape().as_list()
+	elif type(incoming) in [np.array, list, tuple]:
+		return np.shape(incoming)
+	else:
+		raise Exception("Invalid incoming layer.")
+
+def interleave(tensors, axis):
+	old_shape = get_incoming_shape(tensors[0])[1:]
+	new_shape = [-1] + old_shape
+	new_shape[axis] *= len(tensors)
+	return tf.reshape(tf.stack(tensors, axis + 1), new_shape)
+
 def layer(op):
 	'''Decorator for composable network layers.'''
 
@@ -285,16 +300,16 @@ class Network(object):
 		return linear_indices_int
 
 	def unpool_as_conv(self, size, input_data, id, stride = 1, ReLU = False, BN = True):
-
-		# Model upconvolutions (unpooling + convolution) as interleaving feature
-		# maps of four convolutions (A,B,C,D). Building block for up-projections. 
-
+		'''
+		Model upconvolutions (unpooling + convolution) as interleaving feature
+		maps of four convolutions (A,B,C,D). Building block for up-projections. 
+		'''
 
 		# Convolution A (3x3)
 		# --------------------------------------------------
 		layerName = "layer%s_ConvA" % (id)
 		self.feed(input_data)
-		self.conv( 3, 3, size[3], stride, stride, name = layerName, padding = 'SAME', relu = False)
+		self.conv(3, 3, size[3], stride, stride, name = layerName, padding = 'SAME', relu = False)
 		outputA = self.get_output()
 
 		# Convolution B (2x3)
@@ -323,35 +338,10 @@ class Network(object):
 
 		# Interleaving elements of the four feature maps
 		# --------------------------------------------------
-		dims = outputA.get_shape()
-		dim1 = dims[1] * 2
-		dim2 = dims[2] * 2
+		left = interleave([outputA, outputB], axis=1)  # interleave A and B along height axis
+		right = interleave([outputC, outputD], axis=1)  # interleave C and D along height axis
+		Y = interleave([left, right], axis=2)  # interleave result along width axis
 
-		A_row_indices = range(0, dim1, 2)
-		A_col_indices = range(0, dim2, 2)
-		B_row_indices = range(1, dim1, 2)
-		B_col_indices = range(0, dim2, 2)
-		C_row_indices = range(0, dim1, 2)
-		C_col_indices = range(1, dim2, 2)
-		D_row_indices = range(1, dim1, 2)
-		D_col_indices = range(1, dim2, 2)
-
-		all_indices_before = range(int(self.batch_size))
-		all_indices_after = range(dims[3])
-
-		A_linear_indices = self.prepare_indices(all_indices_before, A_row_indices, A_col_indices, all_indices_after, dims)
-		B_linear_indices = self.prepare_indices(all_indices_before, B_row_indices, B_col_indices, all_indices_after, dims) 
-		C_linear_indices = self.prepare_indices(all_indices_before, C_row_indices, C_col_indices, all_indices_after, dims)
-		D_linear_indices = self.prepare_indices(all_indices_before, D_row_indices, D_col_indices, all_indices_after, dims)
-
-		A_flat = tf.reshape(tf.transpose(outputA, [1, 0, 2, 3]), [-1])
-		B_flat = tf.reshape(tf.transpose(outputB, [1, 0, 2, 3]), [-1])
-		C_flat = tf.reshape(tf.transpose(outputC, [1, 0, 2, 3]), [-1])
-		D_flat = tf.reshape(tf.transpose(outputD, [1, 0, 2, 3]), [-1])
-
-		Y_flat = tf.dynamic_stitch([A_linear_indices, B_linear_indices, C_linear_indices, D_linear_indices], [A_flat, B_flat, C_flat, D_flat])
-		Y = tf.reshape(Y_flat, shape = tf.to_int32([-1, dim1.value, dim2.value, dims[3].value]))
-		
 		if BN:
 			layerName = "layer%s_BN" % (id)
 			self.feed(Y)
@@ -363,10 +353,8 @@ class Network(object):
 		
 		return Y
 
-
 	def up_project(self, size, id, stride = 1, BN = True):
-		
-		# Create residual upsampling layer (UpProjection)
+		'''Create residual upsampling layer (UpProjection)'''
 
 		input_data = self.get_output()
 

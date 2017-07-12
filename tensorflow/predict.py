@@ -40,14 +40,17 @@ def predict(model_data_path, image_path):
 
 		init_new_vars_op = tf.variables_initializer(uninitialized_vars)
 		sess.run(init_new_vars_op)
-		
-		print('Running data through neural network...')
+
+		# Evalute the network for the given image
 		pred = sess.run(net.get_output(), feed_dict={input_node: img})
-		
-		print('Plotting result...')
+
+		# Plot result
 		fig = plt.figure()
-		ii = plt.imshow(pred[0,:,:,0], interpolation='nearest')
-		fig.colorbar(ii)
+		fig.add_subplot(1, 2, 1)
+		plt.imshow(img[0,:,:,:])
+		fig.add_subplot(1, 2, 2)
+		ii = plt.imshow(pred[0,:,:,0], interpolation='nearest', cmap='Spectral')
+		plt.colorbar(ii)
 		plt.show()
 
 		print('Done...!')
